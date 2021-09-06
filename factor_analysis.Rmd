@@ -1,0 +1,170 @@
+---
+title: "Untitled"
+author: "Yi-Ling Chen"
+date: "June 6, 2021"
+output: pdf_document
+---
+
+```{r echo=FALSE, results='hide'}
+library(dplyr)
+library(plyr)
+library(ggplot2)
+library(ggcorrplot)
+library(psych)
+library(skimr)
+library(repr)
+```
+
+### 2. Method Justification
+1. The online shop could explore wich underlying factors are important for influncing customers' satisfaction, trust and the reputation of the brand.
+
+2. Which factors of the personality make people to have higher education?
+
+3. Build up a linear regression model to calculate how correlated a variable to the new latant factor. The model should provide a identitical eigenvector.
+
+4. Assumption: All the factor loadings are independent to each other. So that we can make sure the model we get is identifiable.
+
+5. The part that the variance of xi shared with the other variables via the common factors.
+
+6. The result of factor loading is not unique, so the solution is not unique. We could always get a new factor with new factor loading without additional assumption.
+
+
+### 3. Data Preparation
+Show data summary before the data cleaning
+```{r}
+bfi <- read.table("bfi.txt", header=T)
+bfi %>% dplyr::select(A1:A5, C1:C5, E1:E5, N1:N5, O1:O5) %>% skim()
+```
+#### Data Cleaning
+```{r}
+# Delete the records with missing value
+bfi <- na.omit(bfi)
+# Show the difference after data cleaning
+bfi %>% dplyr::select(A1:A5, C1:C5, E1:E5, N1:N5, O1:O5) %>% skim()
+```
+We can see after omitting the missing values, the distribution of each variable remains the same.
+
+#### Correlation Plots
+```{r}
+m_data <- as.matrix(bfi)
+cor_d <- cor(m_data)
+
+ggcorrplot(cor_d, title = "Correlation Between All Variables", type = "lower")+
+  geom_tile()+ 
+  theme(axis.text.x = element_text(angle = 90))
+```
+We can find that A1 has negative correlation with the other variables in factor Agreeableness. And it's because A1 was designed in an opposite way. The higher score of A1, the person shows less care about others' feelings, however, A2-A5 shows more care with higher score. The same for C4 and C5 with C1-C3, C4 and C5 are negative when C1-C3 are positive. E1 and E2 are negative, E3-E5 are positive. O2 and O5 compared to O1, O3, O4.
+
+Then, fliter and show the observed variables with correlation larger than 0.3 and 0.5 to have a better look at the correlations.
+```{r}
+# filter the data for correlation >0.3
+corr <- as.data.frame(cor_d)
+corr[abs(corr) < 0.3] <- 0
+
+ggcorrplot(corr, title = "Correlation Between All Variables")+
+  geom_tile()+ 
+  theme(axis.text.x = element_text(angle = 90))
+
+corr[abs(corr) < 0.5] <- 0
+ggcorrplot(corr, title = "Correlation Between All Variables")+
+  geom_tile()+ 
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+```{r}
+# Recode the variable
+bfi$A1 <- abs(bfi$A1-7)
+bfi$C4 <- abs(bfi$C4-7)
+bfi$C5 <- abs(bfi$C5-7)
+bfi$E1 <- abs(bfi$E1-7)
+bfi$E2 <- abs(bfi$E2-7)
+bfi$O2 <- abs(bfi$O2-7)
+bfi$O5 <- abs(bfi$O5-7)
+
+# Standardize the data
+data <- scale(bfi)
+```
+
+#### EDA
+In questionaires, the questions in the same factor should always have the similar distribution and being correlated to each others to better represent a factor.
+
+From the correlations plots, we could observe that part of the variabls in factor Agreeableness and factor Extraversion are correlated; Part of the variables in factor Extraversion are correlated with the variables in factor Neuroticism.
+```{r}
+my_cols <- c("#00AFBB", "#E7B800") 
+options(repr.plot.width = 20, repr.plot.height = 14)
+pairs(cor(bfi[,c(1:5, 11:15)]), pch = 19,  cex = 0.5,
+      col = my_cols[bfi$gender],
+      lower.panel=NULL)
+```
+```{r}
+pairs(cor(bfi[,11:20]), pch = 19,  cex = 0.5,
+      col = my_cols[bfi$gender],
+      lower.panel=NULL)
+```
+Then we explore the relationship between education and A1 and age which have the relatively higher correlation than other variables.
+```{r}
+
+boxplot(education~A1,data=bfi, main="Education with A1",
+   xlab="Am indifferent to the feelings of others(A1)", ylab="Education")
+
+boxplot(education~age,data=bfi, main="Education with Age",
+   xlab="Age", ylab="Education")
+
+```
+...
+Then explore the distrubution of the data with age and gender.
+```{r}
+hist(bfi$age, main="Age Distribution", xlab="Age")
+abline(v = median(bfi$age), col = "blue", lwd = 2)
+```
+```{r}
+gender.f <- as.factor(bfi$gender)
+ggplot(bfi, aes(fill=gender.f, x=age, y=education)) +
+  geom_bar(position="stack",stat="identity") 
+```
+
+
+### 4. Analysis
+
+Check the eigen vector to avoid the unuiqueness problem and decide the number of the factors.
+```{r}
+eigen(cor_d)$values
+```
+Choose the number of factors by checking how many factors has the eigen value larger than 1. So the number of factors should be 7.
+
+#### Factor analysis without rotation
+The unique variance:
+```{r}
+fal = factanal(covmat = cor_d, factors = 7,n.obs=2236,rotation = 'none')
+fal5 = factanal(covmat = cor_d, factors = 5,n.obs=2236,rotation = 'none')
+print(fal$uniquenesses, digits=3)
+```
+The communalities:
+```{r}
+comm <- fal$loadings # factor loading
+print(diag(comm %*% t(comm)), digits = 3)
+```
+```{r}
+print(comm, digits=3)
+```
+
+#### Factor analysis with rotation
+The analysis with rotation maximizes the loading from each variable to the factor. The facotr vector could be rotate to the space where is most closet to the relevant variables but far from the other unrelevant ones to lower the contributions for the factor. And the rotation method also raise the variance.
+```{r}
+#Varimax rotation
+factor_an_varimax = fa(data, nfactors = 7, rotate = 'varimax', fm ='pa', SMC = T)
+factor_an_varimax$loadings
+# see if communalities remain the same as non-rotated one.
+factor_an_varimax$communality 
+plot(factor_an_varimax)
+
+```
+* PA1: Easy to become friends. (A3; A5; E3; E4)
+* PA2: Neuroticism (N1-N5)
+* PA3: Conscientiousness (C1-C5)
+* PA4: Opennness (O1-O5)
+* PA5: Sensitiveness to others feelings. (A1; gender)
+- remark: famale is usually more sensitive to ther people's feeling than male.
+* PA6: Not easy to approach others. (E1; E2)
+* PA7: Social status. (education; age)
+
