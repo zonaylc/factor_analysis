@@ -1,11 +1,11 @@
 # factor_analysis
 Factor Analysis: 25 Personality items representing 5 factors
 
-#### Data:
+## Data:
 bfi.txt
-#### Description: [source](https://www.personality-project.org/r/html/bfi.html)
+## Description: [source](https://www.personality-project.org/r/html/bfi.html)
 
-#### Tasks
+## Tasks
 1. Method justification
 *Propose one question relevant to a real-word situation that you will answer by
 using factor analysis.
